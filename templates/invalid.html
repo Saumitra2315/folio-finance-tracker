@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Invalid dates{% endblock %}
+{% block main %}
+<section class="panel repair">
+  <h1>Check your dates</h1>
+  <form method="get" action="{{ url_for('dashboard') }}">
+    {% for name, label, field_type, value in [('start','Start date','date',start),('end','End date','date',end),('month','Budget month','month',month)] %}
+    <label>{{ label }}<input type="{{ field_type }}" name="{{ name }}" value="{{ value }}" required>
+      {% if errors[name] %}<span class="error">{{ errors[name] }}</span>{% endif %}
+    </label>
+    {% endfor %}
+    <button class="button primary">Apply dates</button>
+  </form>
+</section>
+{% endblock %}

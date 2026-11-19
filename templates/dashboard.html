@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% macro field_error(name) %}<small class="error" data-error="{{ name }}"></small>{% endmacro %}
+{% macro dialog_title(id, title) %}
+  <div class="dialog-head"><h2 id="{{ id }}-title">{{ title }}</h2><button class="icon-button" type="button" data-close aria-label="Close">{{ icon('close') }}</button></div>
+{% endmacro %}
+{% block nav %}
+<nav class="nav" aria-label="Dashboard sections">
+  <a href="#overview" aria-current="location">{{ icon('grid') }}Overview</a>
+  <a href="#transactions">{{ icon('list') }}Transactions</a>
+  <a href="#budgets">{{ icon('budget') }}Budgets</a>
+</nav>
+{% endblock %}
+{% block main %}
+<section id="overview" aria-labelledby="overview-title">
+  <div class="heading">
+    <div><h1 id="overview-title">Financial overview</h1><p class="period">{{ start|pretty_date }} – {{ end|pretty_date }}</p></div>
+    <div class="actions"><button class="button" data-open="date-dialog">{{ icon('calendar') }}Date range</button><button class="button primary" data-open="transaction-dialog">{{ icon('plus') }}Add transaction</button></div>
+  </div>
+  <div class="stats">
+    <article class="stat balance">
+      <div class="rings" aria-hidden="true"></div>
+      <div class="stat-title"><span class="icon-tile">{{ icon('wallet') }}</span><h2>Net balance</h2></div>
+      <strong>{{ (income-spend)|money }}</strong><p>Income minus expenses</p>
+    </article>
+    {% for label, total, count, glyph in [('Total income',income,income_count,'income'),('Total expenses',spend,rows|length-income_count,'expense')] %}
+    <article class="stat {{ glyph }}">
+      <div class="stat-title"><span class="icon-tile">{{ icon(glyph) }}</span><h2>{{ label }}</h2></div>
+      <strong>{{ total|money }}</strong><p>{{ count }} {{ 'transaction' if count == 1 else 'transactions' }}</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+<div class="charts">
+  <section class="panel chart-panel" aria-labelledby="trend-title">
+    <div class="panel-heading"><div><h2 id="trend-title">Spending trend</h2><p>Monthly expenses in INR</p></div><span class="legend-key"><i></i>Expenses</span></div>
+    {% if expenses %}
+    <div class="plot"><canvas id="trend" role="img" aria-label="Monthly spending line chart"></canvas></div>
+    <details class="chart-table"><summary>View monthly amounts</summary><table><thead><tr><th>Month</th><th>Expenses</th></tr></thead><tbody>{% for item in trend %}<tr><td>{{ item.month|pretty_month }}</td><td>{{ item.paise|money }}</td></tr>{% endfor %}</tbody></table></details>
+    {% else %}<div class="empty chart-empty">{{ icon('expense') }}<span>No expenses in this period</span></div>{% endif %}
+  </section>
+  <section class="panel chart-panel" aria-labelledby="breakdown-title">
+    <div class="panel-heading"><div><h2 id="breakdown-title">Spending by category</h2><p>Share of total expenses</p></div>{{ icon('pie') }}</div>
+    {% if expenses %}
+    <div class="breakdown"><div class="pie-wrap"><canvas id="pie" role="img" aria-label="Expense category pie chart"></canvas></div>
+      <ul class="pie-legend">{% for item in expenses %}<li><i class="swatch c{{ loop.index0 }}"></i><span>{{ item.category }}<strong>{{ item.paise|money }}</strong></span></li>{% endfor %}</ul>
+    </div>
+    {% else %}<div class="empty chart-empty">{{ icon('pie') }}<span>No expenses to break down</span></div>{% endif %}
+  </section>
+</div>
+<div class="lower">
+<section class="panel ledger" id="transactions" aria-labelledby="ledger-title">
+  <div class="panel-heading"><div><h2 id="ledger-title">Transactions</h2><p>{{ rows|length }} {{ 'entry' if rows|length == 1 else 'entries' }} in this period</p></div>
+    <button class="button small" data-open="export-dialog">{{ icon('download') }}Export</button>
+  </div>
+  {% if rows %}
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Transaction ledger"><table>
+    <thead><tr><th>Category / note</th><th>Date</th><th>Type</th><th class="numeric">Amount</th></tr></thead>
+    <tbody>{% for row in rows %}<tr>
+      <td><strong>{{ row.category }}</strong>{% if row.note %}<small>{{ row.note }}</small>{% endif %}</td>
+      <td class="date-cell">{{ row.day|pretty_date }}</td><td><span class="type {{ row.kind }}">{{ row.kind|capitalize }}</span></td>
+      <td class="numeric tx-amount {{ row.kind }}">{{ '+' if row.kind == 'income' else '−' }}{{ row.paise|money }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty">{{ icon('list') }}<span>No transactions in this period</span><button class="text-button" data-open="transaction-dialog">Add a transaction</button></div>{% endif %}
+</section>
+<section class="panel budgets" id="budgets" aria-labelledby="budgets-title">
+  <div class="panel-heading"><div><h2 id="budgets-title">Monthly budgets</h2><button class="month-button" data-open="month-dialog">{{ month|pretty_month }} {{ icon('chevron') }}</button></div>
+    <button class="button small" data-open="budget-dialog">{{ icon('plus') }}Set budget</button>
+  </div>
+  {% for item in budgets %}
+  <div class="budget-row {{ item.tone }}">
+    <div class="budget-head"><strong>{{ item.category }}</strong><span class="status">{{ item.status }}</span></div>
+    {% if item.cap %}
+    <p><b>{{ item.used|money }}</b> of {{ item.cap|money }}</p>
+    <div class="track" aria-hidden="true"><i style="width: {{ [100, item.percent|float]|min }}%"></i></div>
+    <small>{{ item.percent }}% used{% if item.used > item.cap %} · {{ (item.used-item.cap)|money }} over budget{% endif %}</small>
+    {% else %}<p><b>{{ item.used|money }}</b> spent</p>{% endif %}
+  </div>
+  {% else %}<div class="empty">{{ icon('budget') }}<span>No budgets or spending this month</span></div>{% endfor %}
+</section>
+</div>
+
+<dialog id="transaction-dialog" aria-labelledby="transaction-title">
+  {{ dialog_title('transaction','Add transaction') }}
+  <form data-save action="{{ url_for('save_transaction') }}" novalidate>
+    <div class="field-pair"><label>Type<select name="kind"><option value="expense">Expense</option><option value="income">Income</option></select>{{ field_error('kind') }}</label>
+    <label>Date<input name="day" type="date" value="{{ today }}" required>{{ field_error('day') }}</label></div>
+    <label>Category<select name="category" required><option value="">Select category</option>{% for category in categories %}<option value="{{ category.name }}" data-kind="{{ category.kind }}">{{ category.name }}</option>{% endfor %}</select>{{ field_error('category') }}</label>
+    <label>Amount (₹)<input name="amount" inputmode="decimal" placeholder="0.00" required>{{ field_error('amount') }}</label>
+    <label>Note (optional)<input name="note" maxlength="500" placeholder="What was this for?">{{ field_error('note') }}</label>
+    <small class="error" data-error="form" role="alert"></small><button class="button primary submit">Save transaction</button>
+  </form>
+</dialog>
+<dialog id="budget-dialog" aria-labelledby="budget-title">
+  {{ dialog_title('budget','Set monthly budget') }}
+  <form data-save action="{{ url_for('save_budget') }}" novalidate>
+    <label>Budget month<input name="month" type="month" value="{{ month }}" required>{{ field_error('month') }}</label>
+    <label>Expense category<select name="category" required><option value="">Select category</option>{% for c in categories if c.kind == 'expense' %}<option>{{ c.name }}</option>{% endfor %}</select>{{ field_error('category') }}</label>
+    <label>Monthly cap (₹)<input name="amount" inputmode="decimal" placeholder="0.00" required>{{ field_error('amount') }}</label>
+    <small class="error" data-error="form" role="alert"></small><button class="button primary submit">Save budget</button>
+  </form>
+</dialog>
+<dialog id="date-dialog" aria-labelledby="date-title">
+  {{ dialog_title('date','Ledger date range') }}
+  <form method="get" action="{{ url_for('dashboard') }}">
+    <input name="month" type="hidden" value="{{ month }}">
+    <label>Start date<input name="start" type="date" value="{{ start }}" required></label>
+    <label>End date<input name="end" type="date" value="{{ end }}" required></label>
+    <button class="button primary submit">Apply dates</button>
+  </form>
+</dialog>
+<dialog id="month-dialog" aria-labelledby="month-title">
+  {{ dialog_title('month','Budget month') }}
+  <form method="get" action="{{ url_for('dashboard') }}#budgets">
+    <input name="start" type="hidden" value="{{ start }}"><input name="end" type="hidden" value="{{ end }}">
+    <label>Month<input name="month" type="month" value="{{ month }}" required></label><button class="button primary submit">View budgets</button>
+  </form>
+</dialog>
+<dialog id="export-dialog" aria-labelledby="export-title">
+  {{ dialog_title('export','Export expense summary') }}
+  <p class="export-period">{{ start|pretty_date }} – {{ end|pretty_date }}</p>
+  <div class="export-options">{% for fmt in ['csv','json'] %}<a class="button" href="{{ url_for('export', fmt=fmt, start=start, end=end) }}" download>{{ icon('download') }}Download {{ fmt|upper }}</a>{% endfor %}</div>
+</dialog>
+<div id="toast" role="status" hidden></div>
+{% endblock %}
+{% block scripts %}
+{% if config.WEBSITE_SEED %}<script id="website-seed" type="application/json">{{ config.WEBSITE_SEED|tojson }}</script>{% endif %}
+<script id="chart-data" type="application/json">{{ {'trend': trend, 'expenses': expenses}|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}" defer></script>
+<script type="module" src="{{ url_for('static', filename='dashboard.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% macro icon(name) -%}
+<svg class="icon" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#{{ name }}"></use></svg>
+{%- endmacro %}
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f8fb">
+  <title>{% block title %}Financial overview{% endblock %} · Folio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="mast">
+    <div class="bar">
+      <a class="brand" href="{{ request.full_path if request.endpoint == 'dashboard' and not errors else url_for('dashboard') }}" aria-label="Folio home">{{ icon('mark') }}Folio</a>
+      {% block nav %}{% endblock %}
+      <span class="local">{{ icon('device') }} {{ 'Saved in this browser' if config.WEBSITE_SEED else 'Local workspace' }}</span>
+    </div>
+  </header>
+  <main id="main">{% block main %}{% endblock %}</main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
